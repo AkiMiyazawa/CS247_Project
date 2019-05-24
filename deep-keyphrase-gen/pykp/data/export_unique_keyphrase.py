@@ -7,9 +7,6 @@ import os
 
 from pykp.io import copyseq_tokenize
 
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
 if __name__ == '__main__':
     '''
     Go over the whole kp20k dataset and count the number of phrases

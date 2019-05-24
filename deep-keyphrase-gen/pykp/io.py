@@ -17,9 +17,6 @@ from torch.autograd import Variable
 
 from evaluate import if_present_duplicate_phrases, if_present_phrase
 
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
 import torchtext
 import torch
 

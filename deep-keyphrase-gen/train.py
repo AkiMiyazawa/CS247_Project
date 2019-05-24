@@ -48,10 +48,6 @@ def time_usage(func):
 
     return wrapper
 
-
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
 @time_usage
 def _valid_error(data_loader, model, criterion, epoch, opt):
     progbar = Progbar(title='Validating', target=len(data_loader), batch_size=data_loader.batch_size,
@@ -508,7 +504,9 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
                 valid_score_dict =  evaluate.evaluate_multiple_datasets(generator, valid_data_loaders, opt,
                                                                         epoch=epoch,
                                                                         title='valid.epoch=%d.total_batch=%d' % (epoch, total_batch),
-                                                                        predict_save_path=opt.pred_path + '/epoch%d_batch%d_total_batch%d/' % (epoch, batch_i, total_batch))
+                                                                        #TODO
+                                                                        # predict_save_path=opt.pred_path + '/epoch%d_batch%d_total_batch%d/' % (epoch, batch_i, total_batch))
+                                                                        predict_save_path=os.path.join(opt.pred_path, 'epoch%d_batch%d_total_batch%d' % (epoch, batch_i, total_batch)))
                 test_score_dict = evaluate.evaluate_multiple_datasets(generator, test_data_loaders, opt,
                                                                       epoch=epoch,
                                                                       title='test.epoch=%d.total_batch=%d' % (epoch, total_batch),
@@ -742,7 +740,7 @@ def load_vocab_and_datasets_for_testing(dataset_names, type, opt):
         logger.info("Loading test dataset %s" % dataset_name)
         if type == 'test':
             dataset_path = os.path.join(opt.test_dataset_root_path, dataset_name, dataset_name + '.test.one2many.pt')
-        elif type == 'valid' and dataset_name in ['kp20k', 'stackexchange', 'twacg']:
+        elif type == 'valid' and dataset_name in ['kp20k', 'stackexchange', 'twacg', 'stackoverflow']:
             dataset_path = os.path.join(opt.test_dataset_root_path, dataset_name, dataset_name + '.valid.one2many.pt')
         elif type == 'valid' and dataset_name in ['inspec', 'nus', 'semeval', 'krapivin', 'duc']:
             dataset_path = os.path.join(opt.test_dataset_root_path, dataset_name, dataset_name + '.train.one2many.pt')

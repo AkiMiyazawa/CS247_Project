@@ -36,17 +36,19 @@ opt.source_test_file = os.path.join(opt.source_dataset_dir, '%s_testing.json' % 
 
 # output path for exporting the processed dataset
 opt.output_path = os.path.join(opt.output_path_prefix, opt.dataset_name)
-# output path for exporting the processed dataset
-opt.subset_output_path = os.path.join(opt.output_path_prefix, opt.dataset_name+'_small')
+
+# # output path for exporting the processed dataset
+# opt.subset_output_path = os.path.join(opt.output_path_prefix, opt.dataset_name+'_small')
 
 if not os.path.exists(opt.output_path):
     os.makedirs(opt.output_path)
-if not os.path.exists(opt.subset_output_path):
-    os.makedirs(opt.subset_output_path)
+
+# if not os.path.exists(opt.subset_output_path):
+#     os.makedirs(opt.subset_output_path)
 
 
 def main():
-    if opt.dataset_name == 'kp20k':
+    if opt.dataset_name in ['stackoverflow', 'kp20k']:
         src_fields = ['title', 'abstract']
         trg_fields = ['keyword']
         valid_check=True
@@ -91,35 +93,39 @@ def main():
         print('Reset vocab size to %d' % opt.vocab_size)
 
     print("Dumping dict to disk")
-    opt.vocab_path = os.path.join(opt.subset_output_path, opt.dataset_name + '.vocab.pt')
-    torch.save([word2id, id2word, vocab], open(opt.vocab_path, 'wb'))
+    # opt.vocab_path = os.path.join(opt.subset_output_path, opt.dataset_name + '.vocab.pt')
+    # torch.save([word2id, id2word, vocab], open(opt.vocab_path, 'wb'))
+
     opt.vocab_path = os.path.join(opt.output_path, opt.dataset_name + '.vocab.pt')
     torch.save([word2id, id2word, vocab], open(opt.vocab_path, 'wb'))
 
-    print("Exporting a small dataset to %s (for debugging), "
-          "size of train/valid/test is 20000" % opt.subset_output_path)
-    pykp.io.process_and_export_dataset(tokenized_train_pairs[:20000],
-                                       word2id, id2word,
-                                       opt,
-                                       opt.subset_output_path,
-                                       dataset_name=opt.dataset_name,
-                                       data_type='train')
+    #TODO
+    # # DONT NEED THIS FOR STACKOVERFLOW DATASET
 
-    pykp.io.process_and_export_dataset(tokenized_valid_pairs,
-                                       word2id, id2word,
-                                       opt,
-                                       opt.subset_output_path,
-                                       dataset_name=opt.dataset_name,
-                                       data_type='valid',
-                                       include_original=True)
+    # print("Exporting a small dataset to %s (for debugging), "
+    #       "size of train/valid/test is 20000" % opt.subset_output_path)
+    # pykp.io.process_and_export_dataset(tokenized_train_pairs[:20000],
+    #                                    word2id, id2word,
+    #                                    opt,
+    #                                    opt.subset_output_path,
+    #                                    dataset_name=opt.dataset_name,
+    #                                    data_type='train')
 
-    pykp.io.process_and_export_dataset(tokenized_test_pairs,
-                                       word2id, id2word,
-                                       opt,
-                                       opt.subset_output_path,
-                                       dataset_name=opt.dataset_name,
-                                       data_type='test',
-                                       include_original=True)
+    # pykp.io.process_and_export_dataset(tokenized_valid_pairs,
+    #                                    word2id, id2word,
+    #                                    opt,
+    #                                    opt.subset_output_path,
+    #                                    dataset_name=opt.dataset_name,
+    #                                    data_type='valid',
+    #                                    include_original=True)
+
+    # pykp.io.process_and_export_dataset(tokenized_test_pairs,
+    #                                    word2id, id2word,
+    #                                    opt,
+    #                                    opt.subset_output_path,
+    #                                    dataset_name=opt.dataset_name,
+    #                                    data_type='test',
+    #                                    include_original=True)
 
     print("Exporting complete dataset to %s" % opt.output_path)
     pykp.io.process_and_export_dataset(tokenized_train_pairs,

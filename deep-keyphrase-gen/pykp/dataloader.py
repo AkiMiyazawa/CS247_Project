@@ -5,9 +5,6 @@ Large chunk borrowed from PyTorch DataLoader
 
 import os
 
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
 import torch
 import torch.multiprocessing as multiprocessing
 from torch.utils.data.sampler import SequentialSampler, RandomSampler, BatchSampler

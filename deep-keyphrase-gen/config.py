@@ -22,7 +22,9 @@ def init_opt(description):
     if opt.seed > 0:
         torch.manual_seed(opt.seed)
 
-    if torch.cuda.is_available() and not opt.gpuid:
+    #TODO
+    # if torch.cuda.is_available() and not opt.gpuid:
+    if torch.cuda.is_available():
         opt.gpuid = 0
 
     if hasattr(opt, 'train_ml') and opt.train_ml:
@@ -44,7 +46,9 @@ def init_opt(description):
         opt.exp_path = opt.exp_path % (opt.exp, opt.timemark)
 
     # Path to outputs of predictions.
-    setattr(opt, 'pred_path', os.path.join(opt.exp_path, 'pred/'))
+    #TODO
+    # setattr(opt, 'pred_path', os.path.join(opt.exp_path, 'pred/'))
+    setattr(opt, 'pred_path', os.path.join(opt.exp_path, 'pred'))
     # Path to checkpoints.
     setattr(opt, 'model_path', os.path.join(opt.exp_path, 'model/'))
     # Path to log output.
@@ -65,11 +69,15 @@ def init_opt(description):
         os.makedirs(opt.plot_path)
 
     if opt.exp.startswith('kp20k'):
-        opt.test_dataset_names = ['inspec', 'nus', 'semeval', 'krapivin', 'kp20k', 'duc']
+        #TODO
+        # opt.test_dataset_names = ['inspec', 'nus', 'semeval', 'krapivin', 'kp20k', 'duc']
+        opt.test_dataset_names = ['kp20k']
     elif opt.exp.startswith('stackexchange'):
         opt.test_dataset_names = ['stackexchange']
     elif opt.exp.startswith('twacg'):
         opt.test_dataset_names = ['twacg']
+    elif opt.exp.startswith('stackoverflow'):
+        opt.test_dataset_names = ['stackoverflow']
     else:
         raise Exception('Unsupported training data')
 
@@ -115,8 +123,18 @@ def init_logging(logger_name, log_file, redirect_to_stdout=False, level=logging.
 
     if not os.path.exists(log_file[: log_file.rfind(os.sep)]):
         os.makedirs(log_file[: log_file.rfind(os.sep)])
+    
+    #TODO
+    try:
+        fh = logging.FileHandler(log_file)
+        print("\n Executed config.py line 124 normally")
+        # import code
+        # code.interact(local=locals())
+    except:
+        print("\n Did not execute config.py line 124, exception")
+        import code
+        code.interact(local=locals())
 
-    fh = logging.FileHandler(log_file)
     fh.setFormatter(formatter)
     fh.setLevel(level)
 
@@ -323,7 +341,7 @@ def train_opts(parser):
                         help="Fix word embeddings on the encoder side.")
     parser.add_argument('-fix_word_vecs_dec',
                         action='store_true',
-                        help="Fix word embeddings on the encoder side.")
+                        help="Fix word embeddings on the decoder side.")
 
     # Optimization options
     parser.add_argument('-batch_size', type=int, default=128,

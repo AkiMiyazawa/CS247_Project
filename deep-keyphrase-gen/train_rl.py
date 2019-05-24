@@ -46,8 +46,6 @@ def time_usage(func):
         return retval
 
     return wrapper
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
 
 @time_usage
 def _valid_error(data_loader, model, criterion, epoch, opt):

@@ -8,10 +8,6 @@ import argparse
 import json
 import sys
 
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
-
 def main():
     ''' Main function '''
     parser = argparse.ArgumentParser()

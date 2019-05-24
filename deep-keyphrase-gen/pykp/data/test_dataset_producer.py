@@ -13,9 +13,6 @@ import six
 
 from pykp.io import copyseq_tokenize
 
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
 file_dir = os.path.dirname(os.path.realpath(__file__))
 basedir = os.path.join(file_dir[: file_dir.rfind('pykp')], 'source_data', '')
 

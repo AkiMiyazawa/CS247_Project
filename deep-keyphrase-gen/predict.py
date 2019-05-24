@@ -14,9 +14,6 @@ from train import init_model, load_vocab_and_datasets_for_testing
 import pykp
 from pykp.io import KeyphraseDatasetTorchText, KeyphraseDataset
 
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
 logger = logging.getLogger()
 
 

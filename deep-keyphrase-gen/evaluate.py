@@ -179,17 +179,31 @@ def evaluate_multiple_datasets(generator, data_loaders, opt, title='', epoch=1, 
     # create a new tuple (key='all_datasets') by merging all results
     merged_score_dict = {}
     for dataset_name, score_dict in datasets_score_dict.items():
-        for score_name, score_values in score_dict.items:
-            merged_score_values = merged_score_dict.get(score_name, [])
-            merged_score_values.extend(score_values)
-            merged_score_dict[score_name] = merged_score_values
+        #TODO
+        try:
+            for score_name, score_values in score_dict.items():
+                merged_score_values = merged_score_dict.get(score_name, [])
+                merged_score_values.extend(score_values)
+                merged_score_dict[score_name] = merged_score_values                
+        except:
+            import code
+            code.interact(local=locals())
+
+
     datasets_score_dict['all_datasets'] = merged_score_dict
 
     return datasets_score_dict
 
 
 def evaluate_beam_search(generator, data_loader, opt, title='', epoch=1, predict_save_path=None):
-    logger = config.init_logging(title, predict_save_path + '/%s.log' % title, redirect_to_stdout=False)
+    #TODO
+    try:
+        # logger = config.init_logging(title, predict_save_path + '/%s.log' % title, redirect_to_stdout=False)
+        logger = config.init_logging(title, os.path.join(predict_save_path, '%s.log' % title), redirect_to_stdout=False)
+    except:
+        print("In evaluate_beam_search...")
+        import code
+        code.interact(local=locals())
     progbar = Progbar(logger=logger, title=title, target=len(data_loader), batch_size=data_loader.batch_size,
                       total_examples=len(data_loader.dataset))
 
@@ -217,6 +231,10 @@ def evaluate_beam_search(generator, data_loader, opt, title='', epoch=1, predict
         try:
             pred_seq_list = generator.beam_search(src_list, src_len, src_oov_map_list, oov_list, opt.word2id)
         except RuntimeError as re:
+            #TODO
+            # import code
+            # code.interact(local=locals())
+
             logging.exception('Encountered OOM RuntimeError, now trying to predict one by one')
             raise re
 
@@ -250,6 +268,8 @@ def evaluate_beam_search(generator, data_loader, opt, title='', epoch=1, predict
                 pred_is_present_flags, _ = if_present_duplicate_phrases(src_str, processed_pred_str_seqs)
                 filtered_trg_str_seqs = np.asarray(trg_str_seqs)[trg_str_is_present_flags]
             else:
+                #TODO originally did not have line 272
+                filtered_trg_str_seqs = np.asarray(trg_str_seqs)[trg_str_is_present_flags]
                 pred_is_present_flags = [True] * len(processed_pred_str_seqs)
 
             valid_and_present = np.asarray(pred_is_valid_flags) * np.asarray(pred_is_present_flags)

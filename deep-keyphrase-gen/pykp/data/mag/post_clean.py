@@ -6,9 +6,6 @@ import json
 
 from pykp.data.remove_duplicates import example_iterator_from_json
 
-__author__ = "Rui Meng"
-__email__ = "rui.meng@pitt.edu"
-
 if __name__ == '__main__':
     mag_path = "source_data/mag_output/mag_nodup.json"
     mag_output_path = "source_data/mag_output/mag_nodup_plus.json"

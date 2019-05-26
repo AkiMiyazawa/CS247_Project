@@ -207,25 +207,39 @@ def main():
     window_size = 3
     epochs = 50
     lr = 1e-3
+    model = 'textrank'
 
     corpus, keywords = get_raw_data()
     assert len(corpus) == len(keywords)
 
+    '''
     ######### for debugging #########
     max_len = 1
     assert max_len <= len(corpus)
     corpus = corpus[:max_len]
     keywords = keywords[:max_len]
     #################################
+    '''
 
-    data_loader = DataLoader()
-    data_loader.load_data(corpus, keywords)
-    X, y = data_loader.get_data()    
-    vocab, inv_vocab, n_vocab = data_loader.get_metadata()
-    embedder = EmbeddingLayer(n_vocab, embedding_dim, window_size)
-    embedder.gen_embeddings(dataset=X, epochs=epochs, lr=lr)
-    X_emb = embedder.get_embeddings(X)
-    y_emb = embedder.get_embeddings(X)
+    if model == 'Our':
+        data_loader = DataLoader()
+        data_loader.load_data(corpus, keywords)
+        X, y = data_loader.get_data()    
+        vocab, inv_vocab, n_vocab = data_loader.get_metadata()
+        embedder = EmbeddingLayer(n_vocab, embedding_dim, window_size)
+        embedder.gen_embeddings(dataset=X, epochs=epochs, lr=lr)
+        X_emb = embedder.get_embeddings(X)
+        y_emb = embedder.get_embeddings(X)
+    elif model == 'textrank':
+        from summa import keywords as kw
+        print('number of samples: ' + str(len(corpus)))
+        predictions = []
+        for i, sentence in enumerate(corpus):
+            if i % 100 == 0:
+                print('evaluating sample: ' + str(i))
+            prediction = kw.keywords(sentence).split('\n')
+            predictions.append(prediction)
+        print('done!')
 
 if __name__ == '__main__':
     main()

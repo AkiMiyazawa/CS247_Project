@@ -4,6 +4,7 @@ from torch.autograd import Variable
 import numpy as np
 import torch.functional as F
 import torch.nn.functional as F
+import csv
 
 ################################################################
 # DataLoader works fine
@@ -22,13 +23,17 @@ class DataLoader:
         self.vocab_inv = {}
         pass        
 
-    def load_data(self, verbose = True):
-        toy_input = ['toy example', 'foo#', 'bar baz$ C++!', 'todo']
-        toy_output = [['toy', 'easy'], ['foo'], ['C++', 'Java', 'Lists'], ['test']]
+    def load_data(self, sentences=None, keywords=None, verbose=False):
+        if sentences is None or keywords is None:
+            sentences = ['toy example', 'foo#', 'bar baz$ C++!', 'todo']
+            keywords = [['toy', 'easy'], ['foo'], ['C++', 'Java', 'Lists'], ['test']]
         
-        self.tokenized_X = self._tokenize(dataset=toy_input)
-        self.tokenized_y = self._tokenize(dataset=toy_output, keywords=True)
+        print('tokenizing...')
+        self.tokenized_X = self._tokenize(dataset=sentences)
+        self.tokenized_y = self._tokenize(dataset=keywords, keywords=True)
+        print('constructing vocab...')
         self._construct_vocabulary(self.tokenized_X, self.tokenized_y)
+        print('constructing one-hot...')
         onehot_X = self._one_hot(dataset=self.tokenized_X)
         onehot_y = self._one_hot(dataset=self.tokenized_y, keywords=True)
         self.X = onehot_X #torch.tensor(onehot_X)
@@ -125,7 +130,14 @@ class EmbeddingLayer:
     
     def get_embeddings(self, dataset):
         # TODO: concatenate the pytorch vectors here!
-        pass
+        num_sentences, num_words, _ = dataset.shape
+        out = np.zeros([num_sentences, num_words, self.embedding_dim])
+        W = self.W1.detach().numpy()
+        for i, sentence in enumerate(dataset):
+            indices = [np.where(word == 1)[0] for word in sentence]
+            Z = np.hstack([W[:,idx] for idx in indices]).T
+            out[i] = Z
+        return out
     
     def _gen_idx_pairs(self, dataset):
         idx_pairs = []
@@ -177,19 +189,43 @@ class EmbeddingLayer:
             if epoch % 10 == 0:    
                 print('Loss at epoch {}: {}'.format(epoch,loss_val/len(self.idx_pairs)))
 
+def get_raw_data():
+    # load the raw data
+    fp = open('data_subset.csv')
+    csv_reader = csv.reader(fp, delimiter=',')
+    sentences = []
+    keywords = []
+    for row in csv_reader:
+        [sentence, keyword, _] = row
+        sentences.append(sentence)
+        keywords.append(keyword.split(';'))
+    return sentences[1:], keywords[1:]
+
 def main():
     # hyper parameters
     embedding_dim = 10
     window_size = 3
-    epochs = 100
+    epochs = 50
     lr = 1e-3
 
+    corpus, keywords = get_raw_data()
+    assert len(corpus) == len(keywords)
+
+    ######### for debugging #########
+    max_len = 1
+    assert max_len <= len(corpus)
+    corpus = corpus[:max_len]
+    keywords = keywords[:max_len]
+    #################################
+
     data_loader = DataLoader()
-    data_loader.load_data()
+    data_loader.load_data(corpus, keywords)
     X, y = data_loader.get_data()    
     vocab, inv_vocab, n_vocab = data_loader.get_metadata()
     embedder = EmbeddingLayer(n_vocab, embedding_dim, window_size)
     embedder.gen_embeddings(dataset=X, epochs=epochs, lr=lr)
+    X_emb = embedder.get_embeddings(X)
+    y_emb = embedder.get_embeddings(X)
 
 if __name__ == '__main__':
     main()

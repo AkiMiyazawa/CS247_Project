@@ -5,6 +5,7 @@ import numpy as np
 import torch.functional as F
 import torch.nn.functional as F
 import csv
+from summa import keywords as kw
 
 ################################################################
 # DataLoader works fine
@@ -23,7 +24,7 @@ class DataLoader:
         self.vocab_inv = {}
         pass        
 
-    def load_data(self, sentences=None, keywords=None, verbose=False):
+    def load_data(self, sentences=None, keywords=None, verbose=False, load_one_hot=False):
         if sentences is None or keywords is None:
             sentences = ['toy example', 'foo#', 'bar baz$ C++!', 'todo']
             keywords = [['toy', 'easy'], ['foo'], ['C++', 'Java', 'Lists'], ['test']]
@@ -34,10 +35,14 @@ class DataLoader:
         print('constructing vocab...')
         self._construct_vocabulary(self.tokenized_X, self.tokenized_y)
         print('constructing one-hot...')
-        onehot_X = self._one_hot(dataset=self.tokenized_X)
-        onehot_y = self._one_hot(dataset=self.tokenized_y, keywords=True)
-        self.X = onehot_X #torch.tensor(onehot_X)
-        self.y = onehot_y #torch.tensor(onehot_y)
+        if load_one_hot:
+            onehot_X = self._one_hot(dataset=self.tokenized_X)
+            onehot_y = self._one_hot(dataset=self.tokenized_y, keywords=True)
+            self.X = onehot_X #torch.tensor(onehot_X)
+            self.y = onehot_y #torch.tensor(onehot_y)
+        else:
+            self.X = self.tokenized_X #torch.tensor(onehot_X)
+            self.y = self.tokenized_y #torch.tensor(onehot_y)
         if verbose:
             print('====================tokenized====================')
             print(self.tokenized_X)
@@ -50,6 +55,7 @@ class DataLoader:
             print(self.X)
             print(self.y)
             '''
+        print('data loaded')
 
     def get_data(self):
         return self.X, self.y
@@ -68,11 +74,24 @@ class DataLoader:
                 for keyword in sample:
                     tokenized_keyword = word_tokenize(keyword)
                     if len(tokenized_keyword) > 1:
-                        print('WARNING: split keyword {}'.format(','.join(tokenized_keyword)))
+                        if tokenized_keyword[1] == '#':
+                            tokenized_keyword = [tokenized_keyword[0] + tokenized_keyword[1]]
+                        else:
+                            print('WARNING: split keyword {}'.format(','.join(tokenized_keyword)))
                     tokenized_sample.append(tokenized_keyword[0])
             else:
                 # tokenize the entire sentence
                 tokenized_sample = word_tokenize(sample)
+                i_offset = 0
+                for i, t in enumerate(tokenized_sample):
+                    i -= i_offset
+                    if t == '#' and i > 0:
+                        left = tokenized_sample[:i-1]
+                        joined = [tokenized_sample[i - 1] + t]
+                        right = tokenized_sample[i + 1:]
+                        tokenized_sample = left + joined + right
+                        i_offset += 1
+
             tokenized_dataset.append(tokenized_sample)
         return tokenized_dataset # Out[]: list of list of tokens 
 
@@ -118,39 +137,42 @@ class DataLoader:
 # source: https://towardsdatascience.com/implementing-word2vec-in-pytorch-skip-gram-model-e6bae040d2fb
 # TODO: check if this implementation is correct
 class EmbeddingLayer:
-    def __init__(self, n_vocab, embedding_dim, window_size):
+    def __init__(self, n_vocab, embedding_dim, window_size, vocab):
         self.n_vocab = n_vocab
         self.embedding_dim = embedding_dim
         self.window_size = window_size
+        self.vocab = vocab
     
     def gen_embeddings(self, dataset, epochs, lr):
+        print('generating words')
         self._init_embeddings()
+        print('debug0')
         self._gen_idx_pairs(dataset)
+        print('debug1')
         self._train_embeddings(epochs, lr)
+        print('debug2')
     
-    def get_embeddings(self, dataset):
+    def get_embeddings(self, dataset, load_one_hot=False):
         # TODO: concatenate the pytorch vectors here!
         num_sentences, num_words, _ = dataset.shape
         out = np.zeros([num_sentences, num_words, self.embedding_dim])
         W = self.W1.detach().numpy()
         for i, sentence in enumerate(dataset):
-            indices = [np.where(word == 1)[0] for word in sentence]
+            indices = [self.vocab[word] for word in sentence]
             Z = np.hstack([W[:,idx] for idx in indices]).T
             out[i] = Z
         return out
     
-    def _gen_idx_pairs(self, dataset):
+    def _gen_idx_pairs(self, dataset, load_one_hot=False):
         idx_pairs = []
         for sentence in dataset:
-            indices = [np.where(word == 1) for word in sentence]
+            indices = [self.vocab[word] for word in sentence]
             for center_word_pos in range(len(indices)):
                 for w in range(-self.window_size, self.window_size + 1):
                     context_word_pos = center_word_pos + w
                     if context_word_pos < 0 or context_word_pos >= len(indices) or center_word_pos == context_word_pos:
                         continue
                     context_word_idx = indices[context_word_pos]
-                    assert len(context_word_idx) == 1
-                    context_word_idx = context_word_idx[0][0]
                     idx_pairs.append((indices[center_word_pos], context_word_idx))
         self.idx_pairs = idx_pairs
     
@@ -212,26 +234,23 @@ def main():
     corpus, keywords = get_raw_data()
     assert len(corpus) == len(keywords)
 
-    '''
     ######### for debugging #########
-    max_len = 1
+    max_len = 2
     assert max_len <= len(corpus)
     corpus = corpus[:max_len]
     keywords = keywords[:max_len]
     #################################
-    '''
 
     if model == 'Our':
         data_loader = DataLoader()
         data_loader.load_data(corpus, keywords)
         X, y = data_loader.get_data()    
         vocab, inv_vocab, n_vocab = data_loader.get_metadata()
-        embedder = EmbeddingLayer(n_vocab, embedding_dim, window_size)
+        embedder = EmbeddingLayer(n_vocab, embedding_dim, window_size, vocab)
         embedder.gen_embeddings(dataset=X, epochs=epochs, lr=lr)
         X_emb = embedder.get_embeddings(X)
         y_emb = embedder.get_embeddings(X)
     elif model == 'textrank':
-        from summa import keywords as kw
         print('number of samples: ' + str(len(corpus)))
         predictions = []
         for i, sentence in enumerate(corpus):
@@ -240,6 +259,45 @@ def main():
             prediction = kw.keywords(sentence).split('\n')
             predictions.append(prediction)
         print('done!')
+
+    #################### This is from fork ####################
+    from collections import Counter
+    def f1_score(prediction, ground_truth):
+        # both prediction and grount_truth should be list of words
+        common = Counter(prediction) & Counter(ground_truth)
+        num_same = sum(common.values())
+        if num_same == 0:
+            return 0, 0, 0
+        precision = 1.0 * num_same / len(prediction)
+        recall = 1.0 * num_same / len(ground_truth)
+        f1 = (2 * precision * recall) / (precision + recall)
+        return f1, precision, recall
+    ###########################################################
+
+    assert len(predictions) == len(keywords)
+    f1 = 0
+    precision = 0
+    recall = 0
+    for i in range(len(predictions)):
+        prediction = predictions[i]
+        keyword = keywords[i]
+        if i%100 == 0:
+            print('-------------------------')
+            print('prediction:')
+            print(prediction)
+            print('ground-truth:')
+            print(keyword)
+        f1_sample, precision_sample, recall_sample = f1_score(prediction, keyword)
+        f1 += f1_sample
+        precision += precision_sample
+        recall += recall_sample
+
+    f1 /= len(predictions)
+    precision /= len(predictions)
+    recall /= len(predictions)
+    print('F1:{}'.format(f1))
+    print('precision:{}'.format(precision))
+    print('recall:{}'.format(recall))
 
 if __name__ == '__main__':
     main()

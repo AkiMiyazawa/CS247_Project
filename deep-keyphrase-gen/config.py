@@ -391,7 +391,8 @@ def train_opts(parser):
                         help="""Starting learning rate.
                         Recommended settings: sgd = 1, adagrad = 0.1,
                         adadelta = 1, adam = 0.001""")
-    parser.add_argument('-learning_rate_rl', type=float, default=0.0001,
+    #TODO original default was 0.0001
+    parser.add_argument('-learning_rate_rl', type=float, default=0.001,
                         help="""Starting learning rate for Reinforcement Learning.
                         Recommended settings: sgd = 1, adagrad = 0.1,
                         adadelta = 1, adam = 0.001""")

@@ -179,9 +179,16 @@ class SequenceGenerator(object):
         inputs = torch.cat([Variable(torch.LongTensor([seq.sentence[-1]] if seq.sentence[-1] < self.model.vocab_size else [self.model.unk_word])) for seq in flattened_sequences]).view(batch_size, -1)
 
         # (batch_size, trg_hidden_dim)
+        #TODO    
+        dec_num_layers = self.model.decoder.num_layers
+
         if isinstance(flattened_sequences[0].dec_hidden, tuple):
-            h_states = torch.cat([seq.dec_hidden[0] for seq in flattened_sequences]).view(1, batch_size, -1)
-            c_states = torch.cat([seq.dec_hidden[1] for seq in flattened_sequences]).view(1, batch_size, -1)
+            # TODO Accounting for multilayered decoder
+            h_states = torch.cat([seq.dec_hidden[0] for seq in flattened_sequences]).view(dec_num_layers, batch_size, -1)
+            c_states = torch.cat([seq.dec_hidden[1] for seq in flattened_sequences]).view(dec_num_layers, batch_size, -1)
+            
+            # h_states = torch.cat([seq.dec_hidden[0] for seq in flattened_sequences]).view(1, batch_size, -1)
+            # c_states = torch.cat([seq.dec_hidden[1] for seq in flattened_sequences]).view(1, batch_size, -1)
             dec_hiddens = (h_states, c_states)
         else:
             dec_hiddens = torch.cat([seq.state for seq in flattened_sequences])
@@ -224,11 +231,23 @@ class SequenceGenerator(object):
         # each dec_hidden is (trg_seq_len, dec_hidden_dim)
         initial_input = [word2id[pykp.io.BOS_WORD]] * batch_size
         if isinstance(dec_hiddens, tuple):
-            dec_hiddens = (dec_hiddens[0].squeeze(0), dec_hiddens[1].squeeze(0))
-            dec_hiddens = [(dec_hiddens[0][i], dec_hiddens[1][i]) for i in range(batch_size)]
+            #TODO account for stacked decoder, we just want dims of final layer
+            # dec_hiddens = (dec_hiddens[0], dec_hiddens[1]) # ((2,4,512), (2,4,512))
+            dec_hiddens = (dec_hiddens[0].permute(1,0,2), dec_hiddens[1].permute(1,0,2)) # ((4,2,512), (4,2,512))
+
+            # if dec_hiddens[0].shape[0] > 1:
+            #     last_dec_hiddens = (dec_hiddens[0][-1], dec_hiddens[1][-1])
+            # else:
+            #     last_dec_hiddens = (dec_hiddens[0].squeeze(0), dec_hiddens[1].squeeze(0))
+            # last_dec_hiddens = [(last_dec_hiddens[0][i], last_dec_hiddens[1][i]) for i in range(batch_size)]
+
+            # dec_hiddens = [(dec_hiddens[0][-1][i], dec_hiddens[1][-1][i]) for i in range(batch_size)]
+            
+            dec_hiddens = [(dec_hiddens[0][i], dec_hiddens[1][i]) for i in range(batch_size)] 
         elif isinstance(dec_hiddens, list):
             dec_hiddens = dec_hiddens
-
+        # dec_hiddens is now of list # [((2,512), (2,512)), ...]
+        
         partial_sequences = [TopN_heap(self.beam_size) for _ in range(batch_size)]
         complete_sequences = [TopN_heap(sys.maxsize) for _ in range(batch_size)]
 
@@ -236,7 +255,7 @@ class SequenceGenerator(object):
             seq = Sequence(
                 batch_id=batch_i,
                 sentence=[initial_input[batch_i]],
-                dec_hidden=dec_hiddens[batch_i],
+                dec_hidden=dec_hiddens[batch_i], # now dec_hiddens is [(dec_hiddens[0][:][i], dec_hiddens[1][:][i]), ...]
                 context=src_context[batch_i],
                 ctx_mask=src_mask[batch_i],
                 src_oov=src_oov[batch_i],
@@ -256,21 +275,31 @@ class SequenceGenerator(object):
                 # We have run out of partial candidates; often happens when beam_size is small
                 break
 
+            print("Entering beam_search line 284")
+            print("current_len: ", current_len)
+
             # flatten 2d sequences (batch_size, beam_size) into 1d batches (batch_size * beam_size) to feed model
             seq_id2batch_id, flattened_id_map, inputs, dec_hiddens, contexts, ctx_mask, src_oovs, oov_lists = self.sequence_to_batch(partial_sequences)
 
             # Run one-step generation. probs=(batch_size, 1, K), dec_hidden=tuple of (1, batch_size, trg_hidden_dim)
-            log_probs, new_dec_hiddens, attn_weights = self.model.generate(
-                trg_input=inputs,
-                dec_hidden=dec_hiddens,
-                enc_context=contexts,
-                ctx_mask=ctx_mask,
-                src_map=src_oovs,
-                oov_list=oov_lists,
-                # k           =self.beam_size+1,
-                max_len=1,
-                return_attention=self.return_attention
-            )
+
+            # dec_hiddens is still ((2,4,512), (2,4,512)) at this point
+            try:
+                log_probs, new_dec_hiddens, attn_weights = self.model.generate(
+                    trg_input=inputs,
+                    dec_hidden=dec_hiddens,
+                    enc_context=contexts,
+                    ctx_mask=ctx_mask,
+                    src_map=src_oovs,
+                    oov_list=oov_lists,
+                    # k           =self.beam_size+1,
+                    max_len=1,
+                    return_attention=self.return_attention
+                )
+            except:
+                print("beam_search line 297")
+                import code
+                code.interact(local=locals())
 
             # squeeze these outputs, (hyp_seq_size, trg_len=1, K+1) -> (hyp_seq_size, K+1)
             probs, words = log_probs.data.topk(self.beam_size + 1, dim=-1)
@@ -284,9 +313,32 @@ class SequenceGenerator(object):
 
             # tuple of (num_layers * num_directions, batch_size, trg_hidden_dim)=(1, hyp_seq_size, trg_hidden_dim), squeeze the first dim
             if isinstance(new_dec_hiddens, tuple):
-                new_dec_hiddens1 = new_dec_hiddens[0].squeeze(0)
-                new_dec_hiddens2 = new_dec_hiddens[1].squeeze(0)
-                new_dec_hiddens = [(new_dec_hiddens1[i], new_dec_hiddens2[i]) for i in range(num_partial_sequences)]
+                #TODO accounted for multilayers
+                new_dec_hiddens = (new_dec_hiddens[0].permute(1,0,2), new_dec_hiddens[1].permute(1,0,2)) # ((4,2,512), (4,2,512))
+                # if new_dec_hiddens[0].shape[0] > 1:
+                #     new_dec_hiddens1 = new_dec_hiddens[0][-1]
+                #     new_dec_hiddens2 = new_dec_hiddens[1][-1]
+                # else:
+                #     new_dec_hiddens1 = new_dec_hiddens[0].squeeze(0)
+                #     new_dec_hiddens2 = new_dec_hiddens[1].squeeze(0)
+                new_dec_hiddens = [(new_dec_hiddens[0][i], new_dec_hiddens[1][i]) for i in range(num_partial_sequences)]
+                # new_dec_hiddens is now of list # [((2,512), (2,512)), ...]
+
+
+                # dec_hiddens = (dec_hiddens[0].permute(1,0,2), dec_hiddens[1].permute(1,0,2)) # ((4,2,512), (4,2,512))
+
+                # # if dec_hiddens[0].shape[0] > 1:
+                # #     last_dec_hiddens = (dec_hiddens[0][-1], dec_hiddens[1][-1])
+                # # else:
+                # #     last_dec_hiddens = (dec_hiddens[0].squeeze(0), dec_hiddens[1].squeeze(0))
+                # # last_dec_hiddens = [(last_dec_hiddens[0][i], last_dec_hiddens[1][i]) for i in range(batch_size)]
+
+                # # dec_hiddens = [(dec_hiddens[0][-1][i], dec_hiddens[1][-1][i]) for i in range(batch_size)]
+            
+                # dec_hiddens = [(dec_hiddens[0][i], dec_hiddens[1][i]) for i in range(batch_size)] 
+                # # dec_hiddens is now of list # [((2,512), (2,512)), ...]
+
+
 
             # For every partial_sequence (num_partial_sequences in total), find and trim to the best hypotheses (beam_size in total)
             for batch_i in range(batch_size):

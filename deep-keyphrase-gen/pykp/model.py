@@ -376,6 +376,10 @@ class Seq2SeqLSTMAttention(nn.Module):
         decoder_init_hidden = nn.Tanh()(self.encoder2decoder_hidden(enc_h)).unsqueeze(0)
         decoder_init_cell = nn.Tanh()(self.encoder2decoder_cell(enc_c)).unsqueeze(0)
 
+        #TODO Support stacked enc/dec layers
+        decoder_init_hidden = torch.cat(tuple(decoder_init_hidden for i in range(self.decoder.num_layers)), 0)
+        decoder_init_cell = torch.cat(tuple(decoder_init_cell for i in range(self.decoder.num_layers)), 0)
+    
         return decoder_init_hidden, decoder_init_cell
 
     def forward(self, input_src, input_src_len, input_trg, input_src_ext, oov_lists, trg_mask=None, ctx_mask=None):
@@ -425,6 +429,9 @@ class Seq2SeqLSTMAttention(nn.Module):
         src_h, _ = nn.utils.rnn.pad_packed_sequence(src_h, batch_first=True)
 
         # concatenate to (batch_size, hidden_size * num_directions)
+        #TODO
+        # h_t = torch.cat(tuple(src_h_t[i] for i in range(src_h_t.shape[0])), 1)
+        # c_t = torch.cat(tuple(src_c_t[i] for i in range(src_c_t.shape[0])), 1)
         if self.bidirectional:
             h_t = torch.cat((src_h_t[-1], src_h_t[-2]), 1)
             c_t = torch.cat((src_c_t[-1], src_c_t[-2]), 1)
@@ -484,7 +491,13 @@ class Seq2SeqLSTMAttention(nn.Module):
         trg_hidden_dim = self.trg_hidden_dim
 
         # prepare the init hidden vector, (batch_size, dec_hidden_dim) -> 2 * (1, batch_size, dec_hidden_dim)
-        init_hidden = self.init_decoder_state(enc_hidden[0], enc_hidden[1])
+        #TODO
+        try:
+            init_hidden = self.init_decoder_state(enc_hidden[0], enc_hidden[1])
+        except:
+            print("cant compute init_hidden")
+            import code
+            code.interact(local=locals())        
 
         # enc_context has to be reshaped before dot attention (batch_size, src_len, context_dim) -> (batch_size, src_len, trg_hidden_dim)
         if self.attention_layer.method == 'dot':
@@ -512,9 +525,15 @@ class Seq2SeqLSTMAttention(nn.Module):
             trg_emb = trg_emb.permute(1, 0, 2)  # (trg_len, batch_size, embed_dim)
 
             # both in/output of decoder LSTM is batch-second (trg_len, batch_size, trg_hidden_dim)
-            decoder_outputs, dec_hidden = self.decoder(
-                trg_emb, init_hidden
-            )
+            #TODO
+            try:
+                decoder_outputs, dec_hidden = self.decoder(
+                    trg_emb, init_hidden
+                )
+            except:
+                print("Cant compute self.decoder")
+                import code
+                code.interact(local=locals())
             '''
             (2) Standard Attention
             '''
@@ -728,7 +747,7 @@ class Seq2SeqLSTMAttention(nn.Module):
 
     def generate(self, trg_input, dec_hidden, enc_context, ctx_mask=None, src_map=None, oov_list=None, max_len=1, return_attention=False):
         '''
-        Given the initial input, state and the source contexts, return the top K restuls for each time step
+        Given the initial input, state and the source contexts, return the top K results for each time step
         :param trg_input: just word indexes of target texts (usually zeros indicating BOS <s>)
         :param dec_hidden: hidden states for decoder RNN to start with
         :param enc_context: context encoding vectors
@@ -767,8 +786,7 @@ class Seq2SeqLSTMAttention(nn.Module):
 
             # (seq_len, batch_size, hidden_size * num_directions)
             decoder_output, dec_hidden = self.decoder(
-                dec_input, dec_hidden
-            )
+                dec_input, dec_hidden)
 
             # Get the h_tilde (hidden after attention) and attention weights
             h_tilde, attn_weight, attn_logit = self.attention_layer(decoder_output.permute(1, 0, 2), enc_context, encoder_mask=ctx_mask)
@@ -805,6 +823,10 @@ class Seq2SeqLSTMAttention(nn.Module):
 
         # Only return the hidden vectors of the last time step.
         #   tuple of (num_layers * num_directions, batch_size, trg_hidden_dim)=(1, batch_size, trg_hidden_dim)
+        # #TODO DO what the above comment says for dec_hidden
+        # if self.decoder.num_layers > 1:
+        #     dec_hidden = (dec_hidden[0][-1], dec_hidden[1][-1])
+
 
         # Return final outputs, hidden states, and attention weights (for visualization)
         if return_attention:

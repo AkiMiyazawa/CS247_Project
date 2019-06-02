@@ -5,7 +5,7 @@
 # Code adapted from 
 # TODO: 
 # (anton)
-# Inser link
+# Insert link
 
 from collections import Counter
 import pke
@@ -24,18 +24,18 @@ def f1_score(prediction, ground_truth):
     precision = 1.0 * num_same / len(prediction)
     recall = 1.0 * num_same / len(ground_truth)
     f1 = (2 * precision * recall) / (precision + recall)
-    return "{0:.2f}".format(f1)
+    return f1
 
-def compare(model, samples=20):
+def compare(model, samples=5):
   # Get sentences and keys from subset of our data
   sent, keys = get_raw_data()
   scores = []
 
-  for i in range(samples):
-    # Init pke model
+  # Init pke model
+ 
+  for i in range(100, 100+samples):
     constructor = getattr(pke.unsupervised, model)
     extractor = constructor()
-    # extractor = pke.unsupervised.SingleRank()
     # load the content of the document
     extractor.load_document(input=sent[i], language='en')
 
@@ -48,15 +48,24 @@ def compare(model, samples=20):
     # N-best selection, keyphrases contains the 5 highest scored candidates as
     # (keyphrase, score) tuples
     keyphrases = extractor.get_n_best(n=5)
-
     baseline = list(map(lambda x : x[0], keyphrases))
-    f1 = f1_score(baseline, keys[i])
-    scores.append(str(f1))
+
+
+    base = []
+    for j in baseline:
+      base += j.split()
+    # print(base)
+    f1 = f1_score(base, keys[i])
+    # print(f1)
+    scores.append(f1)
   return scores
 
 if __name__ == '__main__':
-  for model in ['TopicRank', 'SingleRank']:
+  for model in ['TopicRank', 'SingleRank', 'TextRank', 'MultipartiteRank', 'PositionRank']:
     print("=========================================")
     scores = compare(model)
-    print("F1 scores for {} are\n\n {}".format(model, ' '.join(scores)))
+    scores_str = [str("{0:.2f}".format(i)) for i in scores]
+    print("F1 scores for {} are\n\n {}".format(model, ' '.join(scores_str)))
+    avg = "{0:.2f}".format(sum(scores) / len(scores))
+    print('Average F1 score is {}'.format( avg ))
   print("=========================================")

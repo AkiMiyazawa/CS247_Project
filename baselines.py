@@ -10,7 +10,10 @@
 from collections import Counter
 import pke
 from main import get_raw_data
+from nltk.corpus import stopwords
 
+# define a list of stopwords
+stoplist = stopwords.words('english')
 
 # TODO:
 # (anton)
@@ -26,7 +29,7 @@ def f1_score(prediction, ground_truth):
     f1 = (2 * precision * recall) / (precision + recall)
     return f1
 
-def compare(model, samples=5):
+def compare(model, samples=10):
   # Get sentences and keys from subset of our data
   sent, keys = get_raw_data()
   scores = []
@@ -58,14 +61,15 @@ def compare(model, samples=5):
     f1 = f1_score(base, keys[i])
     # print(f1)
     scores.append(f1)
+    if i % 10 == 0:
+      print("Calculating...")
   return scores
+
 
 if __name__ == '__main__':
   for model in ['TopicRank', 'SingleRank', 'TextRank', 'MultipartiteRank', 'PositionRank']:
     print("=========================================")
-    scores = compare(model)
-    scores_str = [str("{0:.2f}".format(i)) for i in scores]
-    print("F1 scores for {} are\n\n {}".format(model, ' '.join(scores_str)))
-    avg = "{0:.2f}".format(sum(scores) / len(scores))
+    scores = compare(model,samples=30)
+    avg = "{0:.4f}".format(sum(scores) / len(scores))
     print('Average F1 score is {}'.format( avg ))
   print("=========================================")

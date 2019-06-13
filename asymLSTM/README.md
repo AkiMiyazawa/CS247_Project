@@ -2,11 +2,13 @@
 Code was developed on Windows 10, but should be compatible with Linux systems. 
 
 ## Requirements:
+```
 torch >= 0.4.1
 torchtext >= 0.1.1
 numpy >= 1.13.1
 scipy >= 0.19.0
 sklearn >= 0.18.1
+```
 
 ## Steps to reproduce AsymLSTM + DepthwiseMaxPool
 1. Create a folder ./data/stackoverflow/ from this directory to store the unzipped .pt files downloaded from [here](https://drive.google.com/open?id=1Nm3OMbC24Z2HQyje0Xn2m23tW34y0G3_). 

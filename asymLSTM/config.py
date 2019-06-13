@@ -22,8 +22,6 @@ def init_opt(description):
     if opt.seed > 0:
         torch.manual_seed(opt.seed)
 
-    #TODO
-    # if torch.cuda.is_available() and not opt.gpuid:
     if torch.cuda.is_available():
         opt.gpuid = 0
 
@@ -36,18 +34,11 @@ def init_opt(description):
     if hasattr(opt, 'copy_attention') and opt.copy_attention:
         opt.exp += '.copy'
 
-    # if hasattr(opt, 'bidirectional') and opt.bidirectional:
-    #     opt.exp += '.bi-directional'
-    # else:
-    #     opt.exp += '.uni-directional'
-
     # fill time into the name
     if opt.exp_path.find('%s') > 0:
         opt.exp_path = opt.exp_path % (opt.exp, opt.timemark)
 
     # Path to outputs of predictions.
-    #TODO
-    # setattr(opt, 'pred_path', os.path.join(opt.exp_path, 'pred/'))
     setattr(opt, 'pred_path', os.path.join(opt.exp_path, 'pred'))
     # Path to checkpoints.
     setattr(opt, 'model_path', os.path.join(opt.exp_path, 'model/'))
@@ -68,15 +59,7 @@ def init_opt(description):
     if not os.path.exists(opt.plot_path):
         os.makedirs(opt.plot_path)
 
-    if opt.exp.startswith('kp20k'):
-        #TODO
-        # opt.test_dataset_names = ['inspec', 'nus', 'semeval', 'krapivin', 'kp20k', 'duc']
-        opt.test_dataset_names = ['kp20k']
-    elif opt.exp.startswith('stackexchange'):
-        opt.test_dataset_names = ['stackexchange']
-    elif opt.exp.startswith('twacg'):
-        opt.test_dataset_names = ['twacg']
-    elif opt.exp.startswith('stackoverflow'):
+    if opt.exp.startswith('stackoverflow'):
         opt.test_dataset_names = ['stackoverflow']
     else:
         raise Exception('Unsupported training data')
@@ -191,19 +174,12 @@ def model_opts(parser):
                              '1: Element-wise sum'
                              '2: Max-pooling')
 
-    #TODO Previous default was 512, but 300 performs best so far
     parser.add_argument('-rnn_size', type=int, default=300,
                         help='Size of LSTM hidden states')
-    # parser.add_argument('-input_feed', type=int, default=1,
-    #                     help="""Feed the context vector at each time step as
-    #                     additional input (via concatenation with the word
-    #                     embeddings) to the decoder.""")
 
     parser.add_argument('-rnn_type', type=str, default='LSTM',
                         choices=['LSTM', 'GRU'],
                         help="""The gate type to use in the RNNs""")
-    # parser.add_argument('-residual',   action="store_true",
-    #                     help="Add residual connections between RNN layers.")
 
     parser.add_argument('-input_feeding', action="store_true",
                         help="Apply input feeding or not. Feed the updated hidden vector (after attention)"
@@ -244,19 +220,6 @@ def model_opts(parser):
 
     parser.add_argument('-copy_gate', action="store_true",
                         help="A gate controling the flow from generative model and copy model (see See et al.)")
-
-    # parser.add_argument('-coverage_attn', action="store_true",
-    #                     help='Train a coverage attention layer by Tu:2016:ACL.')
-    # parser.add_argument('-lambda_coverage', type=float, default=1,
-    #                     help='Lambda value for coverage by Tu:2016:ACL.')
-
-    # parser.add_argument('-context_gate', type=str, default=None,
-    #                     choices=['source', 'target', 'both'],
-    #                     help="""Type of context gate to use.
-    #                     Do not select for no context gate by Tu:2017:TACL.""")
-
-    # group.add_argument('-lambda_coverage', type=float, default=1,
-    #                    help='Lambda value for coverage.')
 
     # Cascading model options
     parser.add_argument('-cascading_model', action="store_true",
@@ -442,10 +405,6 @@ def train_opts(parser):
                         help="Name of the experiment for logging.")
     parser.add_argument('-exp_path', type=str, default="exp/%s.%s",
                         help="Path of experiment log/plot.")
-    # parser.add_argument('-pred_path', type=str, default="pred/%s.%s",
-    #                     help="Path of outputs of predictions.")
-    # parser.add_argument('-model_path', type=str, default="model/%s.%s",
-    #                     help="Path of checkpoints.")
 
     # beam search setting
     parser.add_argument('-beam_search_batch_example', type=int, default=8,
@@ -474,40 +433,3 @@ def predict_opts(parser):
     parser.add_argument('-test_dataset_names', type=str, nargs='+',
                         default=[],
                         help='(Set later) Name of each test dataset, also the name of folder from which we load processed test dataset.')
-
-    # parser.add_argument('-num_oneword_seq', type=int, default=10000,
-    #                     help='Source sequence to decode (one line per sequence)')
-    # parser.add_argument('-report_score_names', type=str, nargs='+', default=['f_score@5#oneword=-1', 'f_score@10#oneword=-1', 'f_score@5#oneword=1', 'f_score@10#oneword=1'], help="""Default measure to report""")
-    # parser.add_argument('-save_data', required=True,
-    #                     help="Output file for the prepared test data")
-    # parser.add_argument('-model_path', required=True,
-    #                     help='Path to model .pt file')
-    # parser.add_argument('-vocab', required=True,
-    #                     help="""Path prefix to the ".vocab.pt"
-    #                     file path from preprocess.py""")
-    # parser.add_argument('-output', default='pred.txt',
-    #                     help="""Path to output the predictions (each line will
-    #                     be the decoded sequence""")
-    # parser.add_argument('-replace_unk', action="store_true",
-    #                     help="""Replace the generated UNK tokens with the
-    #                     source token that had highest attention weight. If
-    #                     phrase_table is provided, it will lookup the
-    #                     identified source token and give the corresponding
-    #                     target token. If it is not provided(or the identified
-    #                     source token does not exist in the table) then it
-    #                     will copy the source token""")
-    # parser.add_argument('-verbose', action="store_true",
-    #                     help='Print scores and predictions for each sentence')
-    # parser.add_argument('-attn_debug', action="store_true",
-    #                     help='Print best attn for each word')
-    # parser.add_argument('-dump_beam', type=str, default="",
-    #                     help='File to dump beam information to.')
-    # parser.add_argument('-n_best', type=int, default=1,
-    #                     help="""If verbose is set, will output the n_best
-    #                     decoded sentences""")
-    # GPU
-    # parser.add_argument('-device_ids', default=[0], nargs='+', type=int,
-    #                     help="Use CUDA on the listed devices.")
-    # parser.add_argument('-seed', type=int, default=9527,
-    #                     help="""Random seed used for the experiments
-    #                     reproducibility.""")

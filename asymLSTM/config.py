@@ -184,8 +184,15 @@ def model_opts(parser):
                         help='Number of layers in the encoder')
     parser.add_argument('-dec_layers', type=int, default=1,
                         help='Number of layers in the decoder')
+    parser.add_argument('-enc_cell_state_method', type=int, default=0,
+                        choices=[0,1,2],
+                        help='Compression method for encoder cell states.'
+                             '0: Use last layer'
+                             '1: Element-wise sum'
+                             '2: Max-pooling')
 
-    parser.add_argument('-rnn_size', type=int, default=512,
+    #TODO Previous default was 512, but 300 performs best so far
+    parser.add_argument('-rnn_size', type=int, default=300,
                         help='Size of LSTM hidden states')
     # parser.add_argument('-input_feed', type=int, default=1,
     #                     help="""Feed the context vector at each time step as
@@ -359,6 +366,8 @@ def train_opts(parser):
                         help="""Truncated bptt.""")
     parser.add_argument('-dropout', type=float, default=0.0,
                         help="Dropout probability; applied in LSTM stacks.")
+    parser.add_argument('-num_valid_batches', type=int, default=10,
+                        help="Number of minibatches to use per validation step")                
 
     # Learning options
     parser.add_argument('-train_ml', action="store_true", default=False,
@@ -372,8 +381,10 @@ def train_opts(parser):
                          )
     parser.add_argument('-rl_method', default=0, type=int,
                         help="""0: ori, 1: running average as baseline""")
-    parser.add_argument('-rl_start_epoch', default=2, type=int,
-                        help="""from which epoch rl training starts""")
+    # parser.add_argument('-rl_start_epoch', default=2, type=int,
+    #                     help="""from which epoch rl training starts""")
+    parser.add_argument('-rl_start_total_batch', default=6000, type=int,
+                        help="""from which total_batch rl training starts""")
     # GPU
 
     # Teacher Forcing and Scheduled Sampling
@@ -391,17 +402,16 @@ def train_opts(parser):
                         help="""Starting learning rate.
                         Recommended settings: sgd = 1, adagrad = 0.1,
                         adadelta = 1, adam = 0.001""")
-    #TODO original default was 0.0001
-    parser.add_argument('-learning_rate_rl', type=float, default=0.001,
+    parser.add_argument('-learning_rate_rl', type=float, default=0.0001,
                         help="""Starting learning rate for Reinforcement Learning.
                         Recommended settings: sgd = 1, adagrad = 0.1,
-                        adadelta = 1, adam = 0.001""")
+                        adadelta = 1, adam = 0.0001""")
     parser.add_argument('-learning_rate_decay', type=float, default=0.5,
                         help="""If update_learning_rate, decay learning rate by
                         this much if (i) perplexity does not decrease on the
                         validation set or (ii) epoch has gone past
                         start_decay_at""")
-    parser.add_argument('-start_decay_at', type=int, default=8,
+    parser.add_argument('-start_decay_at', type=int, default=2,
                         help="""Start decaying every epoch after and including this
                         epoch""")
     parser.add_argument('-start_checkpoint_at', type=int, default=2,

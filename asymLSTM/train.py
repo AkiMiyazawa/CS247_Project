@@ -49,8 +49,8 @@ def time_usage(func):
     return wrapper
 
 @time_usage
-def _valid_error(data_loader, model, criterion, epoch, opt):
-    progbar = Progbar(title='Validating', target=len(data_loader), batch_size=data_loader.batch_size,
+def _valid_error(data_loader, model, criterion, epoch, opt, logger):
+    progbar = Progbar(logger=logger, title='Validating', target=len(data_loader), batch_size=data_loader.batch_size,
                       total_examples=len(data_loader.dataset))
     model.eval()
 
@@ -58,11 +58,15 @@ def _valid_error(data_loader, model, criterion, epoch, opt):
 
     # Note that the data should be shuffled every time
     for i, batch in enumerate(data_loader):
-        # if i >= 100:
-        #     break
-
+        if i >= opt.num_valid_batches:
+            break
+        
         one2many_batch, one2one_batch = batch
-        src, trg, trg_target, trg_copy_target, src_ext, oov_lists = one2one_batch
+        src, src_len, trg, trg_target, trg_copy_target, src_ext, oov_lists = one2one_batch
+        max_oov_number = max([len(oov) for oov in oov_lists])
+
+        print("valid src size - ", src.size())
+        print("valid target size - ", trg.size())
 
         if torch.cuda.is_available():
             src = src.cuda()
@@ -71,7 +75,7 @@ def _valid_error(data_loader, model, criterion, epoch, opt):
             trg_copy_target = trg_copy_target.cuda()
             src_ext = src_ext.cuda()
 
-        decoder_log_probs, _, _ = model.forward(src, trg, src_ext)
+        decoder_log_probs, _, _ = model.forward(src, src_len, trg, src_ext, oov_lists)
 
         if not opt.copy_attention:
             loss = criterion(
@@ -80,12 +84,21 @@ def _valid_error(data_loader, model, criterion, epoch, opt):
             )
         else:
             loss = criterion(
-                decoder_log_probs.contiguous().view(-1, opt.vocab_size + opt.max_unk_words),
+                decoder_log_probs.contiguous().view(-1, opt.vocab_size + max_oov_number),
                 trg_copy_target.contiguous().view(-1)
             )
-        losses.append(loss.data[0])
 
-        progbar.update(epoch, i, [('valid_loss', loss.data[0]), ('PPL', loss.data[0])])
+        # TODO Get loss_value
+        if torch.cuda.is_available():
+            loss_value = loss.cpu().data.numpy()
+        else:
+            loss_value = loss.data.numpy()
+        
+        # losses.append(loss.data[0])
+        losses.append(loss_value)
+
+        # progbar.update(epoch, i, [('valid_loss', loss.data[0]), ('PPL', loss.data[0])])
+        progbar.update(epoch, i, [('valid_loss', loss_value), ('PPL', loss_value)])
 
     return losses
 
@@ -179,19 +192,27 @@ def train_rl_0(one2many_batch, model, optimizer, generator, opt):
         trg_seqs = [[opt.id2word[x] if x < opt.vocab_size else oov[x - opt.vocab_size] for x in seq] for seq in trg_copy]
         # trg_seqs            =  [seq + [pykp.IO.EOS_WORD] * (opt.max_sent_length - len(seq)) for seq in trg_seqs]
 
-        # local rewards (bleu)
-        bleu_baselines = get_match_result(true_seqs=trg_seqs, pred_seqs=baseline_str_seqs, type='bleu')
-        bleu_samples = get_match_result(true_seqs=trg_seqs, pred_seqs=sampled_str_seqs, type='bleu')
-
         # global rewards
         match_baselines = get_match_result(true_seqs=trg_seqs, pred_seqs=baseline_str_seqs, type='exact')
         match_samples = get_match_result(true_seqs=trg_seqs, pred_seqs=sampled_str_seqs, type='exact')
-
+        
         _, _, fscore_baselines = evaluate.evaluate(match_baselines, baseline_str_seqs, trg_seqs, topk=5)
-        _, _, fscore_samples = evaluate.evaluate(match_samples, sampled_str_seqs, trg_seqs, topk=5)
+        _, _, fscore_samples = evaluate.evaluate(match_samples, sampled_str_seqs, trg_seqs, topk=5)  
+        
+        #TODO Don't compute bleu if we aren't using it, i.e., if alpha=0
+        alpha = 0.0
+
+        if alpha > 0:
+            # local rewards (bleu)
+            bleu_baselines = get_match_result(true_seqs=trg_seqs, pred_seqs=baseline_str_seqs, type='bleu')
+            bleu_samples = get_match_result(true_seqs=trg_seqs, pred_seqs=sampled_str_seqs, type='bleu')
+        else:
+            # Don't compute local rewards (bleu), just use fscore to get baseline and rewards
+            bleu_baselines = np.asarray([0.0] * len(baseline_str_seqs), dtype='float32')
+            bleu_samples = np.asarray([0.0] * len(sampled_str_seqs), dtype='float32')
 
         # compute the final rewards
-        alpha = 0.0
+        # alpha = 0.0 # Originally alpha was initialized here
         baseline = alpha * np.average(bleu_baselines) + (1.0 - alpha) * fscore_baselines
         rewards = alpha * np.asarray(bleu_samples) + (1.0 - alpha) * fscore_samples
 
@@ -409,7 +430,7 @@ def brief_report(epoch, batch_i, one2one_batch, loss_ml, decoder_log_probs, opt)
             ' [HAS COPY]' + str(trg_i) if has_copy else ''))
 
 
-def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader, valid_data_loaders, test_data_loaders, opt):
+def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader, valid_data_loaders, test_data_loaders, opt, valid_data_loader):
     generator = SequenceGenerator(model,
                                   eos_id=opt.word2id[pykp.io.EOS_WORD],
                                   beam_size=opt.beam_size,
@@ -430,6 +451,7 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
 
     checkpoint_names = []
     train_ml_history_losses = []
+    valid_ml_history_losses = [] #TODO for valid loss
     train_rl_history_losses = []
     valid_history_scores = {}
     test_history_scores = {}
@@ -443,7 +465,7 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
     early_stop_flag = False
     if opt.train_rl:
         reward_cache = RewardCache(2000)
-
+    started_rl_flag = False # Halve validate_every (and model saving) after we start rl since it takes longer per iter
     # if False:  # opt.train_from:
     #     state_path = opt.train_from.replace('.model', '.state')
     #     logger.info('Loading training state from: %s' % state_path)
@@ -483,8 +505,14 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
 
             # do not apply rl in 0th epoch, need to get a resonable model before that.
             if opt.train_rl:
-                if epoch >= opt.rl_start_epoch:
+                # if epoch >= opt.rl_start_epoch: TODO
+                if total_batch >= opt.rl_start_total_batch:
                     loss_rl = train_rl(one2many_batch, model, optimizer_rl, generator, opt, reward_cache)
+                    # Validate and save model twice as frequently after rl started TODO
+                    if not started_rl_flag:
+                        started_rl_flag = True
+                        opt.run_valid_every = opt.run_valid_every/2
+                        opt.save_model_every = opt.save_model_every/2
                 else:
                     loss_rl = 0.0
                 train_rl_losses.append(loss_rl)
@@ -495,10 +523,13 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
             '''
             Validate and save checkpoint
             '''
+            # Perform extra validations + plots before the first opt.run_valid_every (10x) TODO Make sure opt.run_valid_every is divisible by 10
             if (opt.run_valid_every == -1 and batch_i == len(train_data_loader) - 1) or\
-               (opt.run_valid_every > -1 and total_batch > 1 and total_batch % opt.run_valid_every == 0):
+               (opt.run_valid_every > -1 and total_batch > 1 and total_batch % opt.run_valid_every == 0): 
+            #    or\
+                #    (opt.run_valid_every > -1 and total_batch < opt.run_valid_every and total_batch % (opt.run_valid_every / 10) == 0):
                 logger.info('*' * 50)
-                logger.info('Run validing and testing @Epoch=%d,#(Total batch)=%d' % (epoch, total_batch))
+                logger.info('Run validating and testing @Epoch=%d,#(Total batch)=%d' % (epoch, total_batch))
 
                 # return a dict, key is the dataset name and value is a score dict
                 valid_score_dict =  evaluate.evaluate_multiple_datasets(generator, valid_data_loaders, opt,
@@ -511,6 +542,10 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
                                                                       epoch=epoch,
                                                                       title='test.epoch=%d.total_batch=%d' % (epoch, total_batch),
                                                                       predict_save_path=opt.pred_path + '/epoch%d_batch%d_total_batch%d/' % (epoch, batch_i, total_batch))
+                '''
+                Get validation loss, used to detect over/underfitting
+                '''
+                valid_ml_losses = _valid_error(valid_data_loader, model, criterion, epoch, opt, logger)
 
                 '''
                 Merge scores of current round into history_score
@@ -536,12 +571,19 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
                 if opt.train_ml:
                     train_ml_history_losses.append(copy.copy(train_ml_losses))
                     train_ml_losses = []
+                    valid_ml_history_losses.append(copy.copy(valid_ml_losses))
                 if opt.train_rl:
                     train_rl_history_losses.append(copy.copy(train_rl_losses))
                     train_rl_losses = []
                 '''
                 Iterate each dataset (including a merged 'all_datasets') and plot learning curves
                 '''
+                # #TODO
+                # valid_loss = np.average(valid_history_scores['all_datasets'][opt.report_score_names[0]][-1])
+                # valid_ml_history_losses.append(valid_loss)
+                # import code
+                # code.interact(local=locals())
+
                 for dataset_name in opt.test_dataset_names + ['all_datasets']:
                     valid_history_score = valid_history_scores[dataset_name]
                     test_history_score = test_history_scores[dataset_name]
@@ -549,7 +591,11 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
                     scores_for_plot = []
                     if opt.train_ml:
                         scores_for_plot += [train_ml_history_losses]
-                        curve_names += ['Training ML Error']
+                        # curve_names += ['Training ML Error']
+                        curve_names += ['Training Loss (NLL)']
+                        # TODO Add curve for valid loss as well
+                        scores_for_plot += [valid_ml_history_losses]
+                        curve_names += ['Validation Loss (NLL)']
 
                     if opt.train_rl:
                         scores_for_plot += [train_rl_history_losses]
@@ -574,6 +620,7 @@ def train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader,
                 determine if early stop training (whether f-score increased, previously is if valid error decreased)
                 opt.report_score_names[0] is 'f_score@5_exact'
                 '''
+                #TODO plot valid loss as well
                 valid_loss = np.average(valid_history_scores['all_datasets'][opt.report_score_names[0]][-1])
                 is_best_loss = valid_loss > best_loss
                 rate_of_change = float(valid_loss - best_loss) / float(best_loss) if float(best_loss) > 0 else 0.0
@@ -691,14 +738,14 @@ def load_data_vocab_for_training(opt, load_train=True):
                                                 max_batch_example=opt.beam_search_batch_example,
                                                 max_batch_pair=opt.beam_search_batch_size,
                                                 pin_memory=pin_memory,
-                                                shuffle=False)
+                                                shuffle=True)
     test_one2many_loader = KeyphraseDataLoader(dataset=test_one2many_dataset,
                                                collate_fn=test_one2many_dataset.collate_fn_one2many,
                                                num_workers=opt.batch_workers,
                                                max_batch_example=opt.beam_search_batch_example,
                                                max_batch_pair=opt.beam_search_batch_size,
                                                pin_memory=pin_memory,
-                                               shuffle=False)
+                                               shuffle=True)
 
     opt.word2id = word2id
     opt.id2word = id2word
@@ -721,8 +768,9 @@ def load_vocab_and_datasets_for_testing(dataset_names, type, opt):
     '''
     Load additional datasets from disk
     For now seven datasets are included: 'inspec', 'nus', 'semeval', 'krapivin', 'kp20k', 'duc', 'stackexchange'
-     Only 'kp20k', 'stackexchange' provide train/valid/test data.
-     The others have only train/test, and the train is mostly used for validation.
+    Only 'kp20k', 'stackexchange' provide train/valid/test data.
+    The others have only train/test, and the train is mostly used for validation.
+    Modified to load only stackoverflow dataset
     :param type:
     :param opt:
     :return:
@@ -759,7 +807,7 @@ def load_vocab_and_datasets_for_testing(dataset_names, type, opt):
                                               max_batch_example=opt.beam_search_batch_example,
                                               max_batch_pair=opt.beam_search_batch_size,
                                               pin_memory=pin_memory,
-                                              shuffle=False)
+                                              shuffle=True)
 
         one2many_loaders.append(one2many_loader)
 
@@ -877,7 +925,7 @@ def main():
         test_data_loaders, _, _, _ = load_vocab_and_datasets_for_testing(dataset_names=opt.test_dataset_names, type='test', opt=opt)
         model = init_model(opt)
         optimizer_ml, optimizer_rl, criterion = init_optimizer_criterion(model, opt)
-        train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader, valid_data_loaders, test_data_loaders, opt)
+        train_model(model, optimizer_ml, optimizer_rl, criterion, train_data_loader, valid_data_loaders, test_data_loaders, opt, valid_data_loader)
     except Exception as e:
         logging.error(e, exc_info=True)
         raise

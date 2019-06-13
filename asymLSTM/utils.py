@@ -214,8 +214,9 @@ def plot_learning_curve_and_write_csv(scores, curve_names, checkpoint_names, tit
     plt.title(title)
     if ylim is not None:
         plt.ylim(*ylim)
-    plt.xlabel("Training examples")
-    plt.ylabel("Score")
+    # plt.xlabel("Training examples")
+    plt.xlabel("Epochs")
+    plt.ylabel("Scores")
 
     # print(train_scores)
     # print(test_scores)
@@ -233,7 +234,10 @@ def plot_learning_curve_and_write_csv(scores, curve_names, checkpoint_names, tit
         std  = np.asarray([np.std(s) for s in score])
         stds[name] = std
 
-        if name.lower().startswith('training ml'):
+        # To squeeze into same screen as f1-scores
+        if name.lower().startswith('training loss') or name.lower().startswith('validation loss'):          
+            # import code
+            # code.interact(local=locals())
             score_ = [np.asarray(s) / 20.0 for s in score]
             mean = np.asarray([np.mean(s) for s in score_])
             std  = np.asarray([np.std(s) for s in score_])
@@ -243,6 +247,7 @@ def plot_learning_curve_and_write_csv(scores, curve_names, checkpoint_names, tit
                          color=colors[i])
         plt.plot(train_sizes, mean, 'o-', color=colors[i],
                  label=name)
+        plt.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
 
     plt.legend(loc="best", prop={'size': 6})
     # plt.show()

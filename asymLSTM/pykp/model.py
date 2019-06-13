@@ -238,6 +238,7 @@ class Seq2SeqLSTMAttention(nn.Module):
         self.nlayers_src = opt.enc_layers
         self.nlayers_trg = opt.dec_layers
         self.dropout = opt.dropout
+        self.enc_cell_state_method = opt.enc_cell_state_method
 
         self.pad_token_src = opt.word2id[pykp.io.PAD_WORD]
         self.pad_token_trg = opt.word2id[pykp.io.PAD_WORD]
@@ -437,7 +438,14 @@ class Seq2SeqLSTMAttention(nn.Module):
             c_t = torch.cat((src_c_t[-1], src_c_t[-2]), 1)
         else:
             h_t = src_h_t[-1]
-            c_t = src_c_t[-1]
+
+            #TODO Take cell states from last layer, or combine??
+            if self.enc_cell_state_method == 0:
+                c_t = src_c_t[-1] # Take from last layer
+            elif self.enc_cell_state_method == 1:
+                c_t = torch.sum(src_c_t, dim=0) # Add all cell-states
+            elif self.enc_cell_state_method == 2: 
+                c_t = torch.max(src_c_t, dim=0)[0] # Max-pooling
 
         return src_h, (h_t, c_t)
 
@@ -509,7 +517,7 @@ class Seq2SeqLSTMAttention(nn.Module):
 
         # Teacher Forcing
         self.current_batch += 1
-        # because sequence-wise training is not compatible with input-feeding, so discard it
+        # because sequence-wise     ing is not compatible with input-feeding, so discard it
         # TODO 20180722, do_word_wisely_training=True is buggy
         do_word_wisely_training = False
         if not do_word_wisely_training:

@@ -1,18 +1,3 @@
-# CS247_Project
-Project for CS247: Advanced Data Mining
+# Depthwise Max Pooling in Asymmetric Encoder-Decoders with Attention and Copy for Keyphrase Generation
 
-
-<!-- Use this to cite  pke
-
-@InProceedings{boudin:2016:COLINGDEMO,
-  author    = {Boudin, Florian},
-  title     = {pke: an open source python-based keyphrase extraction toolkit},
-  booktitle = {Proceedings of COLING 2016, the 26th International Conference on Computational Linguistics: System Demonstrations},
-  month     = {December},
-  year      = {2016},
-  address   = {Osaka, Japan},
-  pages     = {69--73},
-  url       = {http://aclweb.org/anthology/C16-2015}
-}
-
- -->
+Keyphrase generation on Community-based Question Answering (CQA) websites is the prediction of keywords associated with given text content. There are known supervised and unsupervised algo- rithms used for solving this problem, where the current state of the art technique utilizes deep learning algorithms in the form of Encoder-Decoder frameworks, in addition to techniques such as attention and copying mechanisms. However, Encoder-Decoder models were originally designed for language translation tasks, so despite strong empirical results, the canonical Encoder-Decoder architecture may not be as optimal for the specific problem do- main of keyphrase generation. We propose several architectural changes to improve on existing Encoder-Decoder frameworks for keyphrase generation, including (1) an asymmetrically stacked ar- chitecture, as well as (2) a novel approach to aggregate cell states of a stacked LSTM via depthwise max pooling. Our current best model AsymLSTM+DepthwiseMaxPool also utilizes attention and copying mechanisms similar to previous studies. It is able to outperform these existing methods even without the use of bidirectional layers, which has been widely considered as the new baseline for various natural language processing tasks. Our experiments were conducted using the "StackSample: 10% of StackOverflow Q&A" dataset that is available on Kaggle.
